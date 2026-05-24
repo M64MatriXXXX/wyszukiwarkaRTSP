@@ -10,6 +10,7 @@ app.config["SECRET_KEY"] = "rtsp-scanner-secret"
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
 
 active_streams = {}
+active_scans = {}
 stream_lock = threading.Lock()
 
 
@@ -33,10 +34,14 @@ def handle_scan(data):
         return
 
     emit("scan_started", {"total": len(passwords)})
+    active_scans[sid] = {"cancelled": False}
 
     def scan():
         found = False
         for i, password in enumerate(passwords):
+            if active_scans.get(sid, {}).get("cancelled"):
+                break
+
             url = f"rtsp://{username}:{password}@{ip}:{port}/stream1"
             socketio.emit("trying", {"index": i + 1, "total": len(passwords), "url": f"rtsp://{username}:***@{ip}:{port}/stream1", "password": password}, to=sid)
 
@@ -49,6 +54,10 @@ def handle_scan(data):
                 ret, frame = cap.read()
                 if ret and frame is not None:
                     connected = True
+
+            if active_scans.get(sid, {}).get("cancelled"):
+                cap.release()
+                break
 
             if connected:
                 socketio.emit("found", {
@@ -64,11 +73,20 @@ def handle_scan(data):
 
             time.sleep(0.1)
 
+        was_cancelled = active_scans.pop(sid, {}).get("cancelled", False)
         if not found:
-            socketio.emit("scan_done", {"found": False}, to=sid)
+            socketio.emit("scan_done", {"found": False, "cancelled": was_cancelled}, to=sid)
 
     thread = threading.Thread(target=scan, daemon=True)
     thread.start()
+
+
+@socketio.on("cancel_scan")
+def handle_cancel_scan(data):
+    sid = data.get("sid")
+    if sid in active_scans:
+        active_scans[sid]["cancelled"] = True
+    emit("scan_cancelled", {})
 
 
 @socketio.on("stop_stream")

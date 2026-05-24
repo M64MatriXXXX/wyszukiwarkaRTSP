@@ -104,6 +104,16 @@
     cursor: not-allowed;
   }
 
+  #btn-cancel {
+    background: #1a1a2e;
+    color: #ffaa00;
+    border: 1px solid #ffaa00;
+    margin-top: 10px;
+    display: none;
+  }
+
+  #btn-cancel:hover { background: #ffaa0022; }
+
   #btn-stop {
     background: #1a1a2e;
     color: #ff4444;
@@ -266,6 +276,7 @@
   <textarea id="passwords" placeholder="admin&#10;12345&#10;password&#10;123456&#10;admin123"></textarea>
 
   <button id="btn-scan" onclick="startScan()">Rozpocznij skanowanie</button>
+  <button id="btn-cancel" onclick="cancelScan()">&#x23F9; Anuluj skanowanie</button>
   <button id="btn-stop" onclick="stopStream()">Zatrzymaj stream</button>
 
   <div id="status-box">
@@ -318,6 +329,7 @@ function startScan() {
 
   scanning = true;
   document.getElementById("btn-scan").disabled = true;
+  document.getElementById("btn-cancel").style.display = "block";
   document.getElementById("btn-stop").style.display = "none";
   document.getElementById("found-card").style.display = "none";
   document.getElementById("stream-card").style.display = "none";
@@ -327,6 +339,12 @@ function startScan() {
   document.getElementById("status-text").textContent = "Łączenie...";
 
   socket.emit("start_scan", { ip, port, username, passwords, sid: mySid });
+}
+
+function cancelScan() {
+  socket.emit("cancel_scan", { sid: mySid });
+  document.getElementById("btn-cancel").style.display = "none";
+  document.getElementById("status-text").textContent = "Anulowanie... (czekam na koniec bieżącej próby)";
 }
 
 function stopStream() {
@@ -357,6 +375,7 @@ socket.on("trying", (d) => {
 socket.on("found", (d) => {
   scanning = false;
   fullUrl = d.url;
+  document.getElementById("btn-cancel").style.display = "none";
   document.getElementById("progress-bar").style.width = "100%";
   document.getElementById("status-text").textContent = "Znaleziono działające hasło!";
   addLog(`✓ Znaleziono! Hasło: ${d.password}`, "log-found");
@@ -369,12 +388,22 @@ socket.on("found", (d) => {
   document.getElementById("stream-error").style.display = "none";
 });
 
+socket.on("scan_cancelled", () => {
+  document.getElementById("btn-cancel").style.display = "none";
+});
+
 socket.on("scan_done", (d) => {
   scanning = false;
+  document.getElementById("btn-cancel").style.display = "none";
   document.getElementById("btn-scan").disabled = false;
   if (!d.found) {
-    document.getElementById("status-text").textContent = "Brak działającego hasła.";
-    addLog("✗ Żadne hasło nie zadziałało.", "log-fail");
+    if (d.cancelled) {
+      document.getElementById("status-text").textContent = "Skanowanie anulowane.";
+      addLog("⏹ Skanowanie zostało anulowane.", "log-info");
+    } else {
+      document.getElementById("status-text").textContent = "Brak działającego hasła.";
+      addLog("✗ Żadne hasło nie zadziałało.", "log-fail");
+    }
   }
 });
 
