@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RTSP Scanner</title>
+<script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #0d0d0d;
+    color: #e0e0e0;
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px;
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    color: #00e5ff;
+    margin-bottom: 24px;
+    letter-spacing: 0.05em;
+    text-shadow: 0 0 20px rgba(0,229,255,0.4);
+  }
+
+  .card {
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    padding: 24px;
+    width: 100%;
+    max-width: 580px;
+    margin-bottom: 20px;
+  }
+
+  label {
+    display: block;
+    font-size: 0.8rem;
+    color: #888;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  input, textarea {
+    width: 100%;
+    background: #0d0d1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #e0e0e0;
+    padding: 10px 14px;
+    font-size: 0.95rem;
+    outline: none;
+    transition: border-color 0.2s;
+    margin-bottom: 16px;
+  }
+
+  input:focus, textarea:focus {
+    border-color: #00e5ff;
+  }
+
+  textarea {
+    height: 120px;
+    resize: vertical;
+    font-family: 'Courier New', monospace;
+    font-size: 0.88rem;
+  }
+
+  .row {
+    display: flex;
+    gap: 12px;
+  }
+
+  .row > div { flex: 1; }
+
+  button {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.04em;
+  }
+
+  #btn-scan {
+    background: linear-gradient(135deg, #00e5ff, #0070ff);
+    color: #000;
+  }
+
+  #btn-scan:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 20px rgba(0,229,255,0.4);
+  }
+
+  #btn-scan:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+
+  #btn-stop {
+    background: #1a1a2e;
+    color: #ff4444;
+    border: 1px solid #ff4444;
+    margin-top: 10px;
+    display: none;
+  }
+
+  #btn-stop:hover { background: #ff444422; }
+
+  #status-box {
+    margin-top: 16px;
+    display: none;
+  }
+
+  .progress-bar-wrap {
+    background: #0d0d1a;
+    border-radius: 999px;
+    height: 8px;
+    overflow: hidden;
+    margin-bottom: 10px;
+  }
+
+  .progress-bar {
+    height: 100%;
+    background: linear-gradient(90deg, #00e5ff, #0070ff);
+    border-radius: 999px;
+    transition: width 0.2s;
+    width: 0%;
+  }
+
+  #status-text {
+    font-size: 0.85rem;
+    color: #888;
+    min-height: 20px;
+  }
+
+  .log-box {
+    margin-top: 12px;
+    background: #0d0d1a;
+    border: 1px solid #222;
+    border-radius: 8px;
+    padding: 10px 14px;
+    max-height: 140px;
+    overflow-y: auto;
+    font-family: 'Courier New', monospace;
+    font-size: 0.8rem;
+  }
+
+  .log-line { padding: 2px 0; }
+  .log-try { color: #555; }
+  .log-found { color: #00ff88; font-weight: bold; }
+  .log-fail { color: #ff4444; }
+  .log-info { color: #00e5ff; }
+
+  #found-card {
+    display: none;
+    background: #0d2a1a;
+    border: 1px solid #00ff88;
+    border-radius: 12px;
+    padding: 20px 24px;
+    width: 100%;
+    max-width: 580px;
+    margin-bottom: 20px;
+  }
+
+  #found-card h2 {
+    color: #00ff88;
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+  }
+
+  .info-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    font-size: 0.9rem;
+  }
+
+  .info-label { color: #888; min-width: 80px; }
+
+  .copy-btn {
+    background: none;
+    border: 1px solid #00ff88;
+    color: #00ff88;
+    padding: 2px 10px;
+    border-radius: 4px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    width: auto;
+    transition: background 0.2s;
+  }
+
+  .copy-btn:hover { background: #00ff8822; }
+
+  #stream-card {
+    display: none;
+    width: 100%;
+    max-width: 900px;
+    background: #1a1a2e;
+    border: 1px solid #2a2a4a;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+
+  #stream-card h2 {
+    font-size: 1rem;
+    color: #00e5ff;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    background: #00ff88;
+    border-radius: 50%;
+    animation: pulse 1.2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.2; }
+  }
+
+  #stream-img {
+    width: 100%;
+    border-radius: 8px;
+    display: block;
+    background: #000;
+    min-height: 200px;
+  }
+
+  #stream-error { color: #ff4444; font-size: 0.88rem; margin-top: 8px; display: none; }
+</style>
+</head>
+<body>
+
+<h1>&#x1F4F9; RTSP Scanner</h1>
+
+<div class="card">
+  <div class="row">
+    <div>
+      <label>Adres IP kamery</label>
+      <input id="ip" type="text" placeholder="np. 192.168.1.100">
+    </div>
+    <div style="max-width: 100px;">
+      <label>Port</label>
+      <input id="port" type="text" value="554">
+    </div>
+  </div>
+
+  <label>Nazwa użytkownika</label>
+  <input id="username" type="text" value="admin">
+
+  <label>Hasła do sprawdzenia (jedno na linię lub po przecinku)</label>
+  <textarea id="passwords" placeholder="admin&#10;12345&#10;password&#10;123456&#10;admin123"></textarea>
+
+  <button id="btn-scan" onclick="startScan()">Rozpocznij skanowanie</button>
+  <button id="btn-stop" onclick="stopStream()">Zatrzymaj stream</button>
+
+  <div id="status-box">
+    <div class="progress-bar-wrap">
+      <div class="progress-bar" id="progress-bar"></div>
+    </div>
+    <div id="status-text"></div>
+    <div class="log-box" id="log-box"></div>
+  </div>
+</div>
+
+<div id="found-card">
+  <h2>&#x2705; Znaleziono działające hasło!</h2>
+  <div class="info-row">
+    <span class="info-label">Hasło:</span>
+    <span id="found-password" style="color:#fff;font-weight:bold;"></span>
+    <button class="copy-btn" onclick="copyText('found-password')">Kopiuj</button>
+  </div>
+  <div class="info-row">
+    <span class="info-label">URL:</span>
+    <span id="found-url" style="color:#aaa;font-size:0.82rem;word-break:break-all;"></span>
+    <button class="copy-btn" onclick="copyFullUrl()">Kopiuj URL</button>
+  </div>
+</div>
+
+<div id="stream-card">
+  <h2><span class="dot"></span> Live Stream</h2>
+  <img id="stream-img" alt="Stream">
+  <div id="stream-error"></div>
+</div>
+
+<script>
+const socket = io();
+let mySid = null;
+let fullUrl = "";
+let scanning = false;
+
+socket.on("connect", () => { mySid = socket.id; });
+
+function startScan() {
+  const ip = document.getElementById("ip").value.trim();
+  const port = document.getElementById("port").value.trim() || "554";
+  const username = document.getElementById("username").value.trim() || "admin";
+  const passwords = document.getElementById("passwords").value;
+
+  if (!ip || !passwords.trim()) {
+    alert("Podaj adres IP i hasła.");
+    return;
+  }
+
+  scanning = true;
+  document.getElementById("btn-scan").disabled = true;
+  document.getElementById("btn-stop").style.display = "none";
+  document.getElementById("found-card").style.display = "none";
+  document.getElementById("stream-card").style.display = "none";
+  document.getElementById("status-box").style.display = "block";
+  document.getElementById("log-box").innerHTML = "";
+  document.getElementById("progress-bar").style.width = "0%";
+  document.getElementById("status-text").textContent = "Łączenie...";
+
+  socket.emit("start_scan", { ip, port, username, passwords, sid: mySid });
+}
+
+function stopStream() {
+  socket.emit("stop_stream", { sid: mySid });
+  document.getElementById("btn-stop").style.display = "none";
+}
+
+function addLog(text, cls) {
+  const box = document.getElementById("log-box");
+  const line = document.createElement("div");
+  line.className = "log-line " + cls;
+  line.textContent = text;
+  box.appendChild(line);
+  box.scrollTop = box.scrollHeight;
+}
+
+socket.on("scan_started", (d) => {
+  addLog(`Sprawdzam ${d.total} haseł...`, "log-info");
+});
+
+socket.on("trying", (d) => {
+  const pct = Math.round((d.index / d.total) * 100);
+  document.getElementById("progress-bar").style.width = pct + "%";
+  document.getElementById("status-text").textContent = `Próba ${d.index}/${d.total} — hasło: ${d.password}`;
+  addLog(`[${d.index}/${d.total}] Próbuję: ${d.password}`, "log-try");
+});
+
+socket.on("found", (d) => {
+  scanning = false;
+  fullUrl = d.url;
+  document.getElementById("progress-bar").style.width = "100%";
+  document.getElementById("status-text").textContent = "Znaleziono działające hasło!";
+  addLog(`✓ Znaleziono! Hasło: ${d.password}`, "log-found");
+
+  document.getElementById("found-password").textContent = d.password;
+  document.getElementById("found-url").textContent = d.display_url;
+  document.getElementById("found-card").style.display = "block";
+  document.getElementById("stream-card").style.display = "block";
+  document.getElementById("btn-stop").style.display = "block";
+  document.getElementById("stream-error").style.display = "none";
+});
+
+socket.on("scan_done", (d) => {
+  scanning = false;
+  document.getElementById("btn-scan").disabled = false;
+  if (!d.found) {
+    document.getElementById("status-text").textContent = "Brak działającego hasła.";
+    addLog("✗ Żadne hasło nie zadziałało.", "log-fail");
+  }
+});
+
+socket.on("frame", (d) => {
+  document.getElementById("stream-img").src = "data:image/jpeg;base64," + d.data;
+});
+
+socket.on("stream_error", (d) => {
+  const el = document.getElementById("stream-error");
+  el.textContent = d.message;
+  el.style.display = "block";
+  document.getElementById("btn-stop").style.display = "none";
+  document.getElementById("btn-scan").disabled = false;
+});
+
+socket.on("stream_stopped", () => {
+  document.getElementById("btn-scan").disabled = false;
+});
+
+socket.on("error", (d) => {
+  alert(d.message);
+  document.getElementById("btn-scan").disabled = false;
+});
+
+function copyText(id) {
+  const text = document.getElementById(id).textContent;
+  navigator.clipboard.writeText(text).then(() => alert("Skopiowano!"));
+}
+
+function copyFullUrl() {
+  navigator.clipboard.writeText(fullUrl).then(() => alert("Skopiowano pełny URL ze hasłem!"));
+}
+</script>
+</body>
+</html>
