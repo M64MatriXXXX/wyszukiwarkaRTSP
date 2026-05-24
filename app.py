@@ -38,7 +38,7 @@ def handle_scan(data):
         found = False
         for i, password in enumerate(passwords):
             url = f"rtsp://{username}:{password}@{ip}:{port}/stream1"
-            emit("trying", {"index": i + 1, "total": len(passwords), "url": f"rtsp://{username}:***@{ip}:{port}/stream1", "password": password}, to=sid)
+            socketio.emit("trying", {"index": i + 1, "total": len(passwords), "url": f"rtsp://{username}:***@{ip}:{port}/stream1", "password": password}, to=sid)
 
             cap = cv2.VideoCapture(url, cv2.CAP_FFMPEG)
             cap.set(cv2.CAP_PROP_OPEN_TIMEOUT_MSEC, 4000)
@@ -51,7 +51,7 @@ def handle_scan(data):
                     connected = True
 
             if connected:
-                emit("found", {
+                socketio.emit("found", {
                     "password": password,
                     "url": f"rtsp://{username}:{password}@{ip}:{port}/stream1",
                     "display_url": f"rtsp://{username}:***@{ip}:{port}/stream1",
@@ -65,7 +65,7 @@ def handle_scan(data):
             time.sleep(0.1)
 
         if not found:
-            emit("scan_done", {"found": False}, to=sid)
+            socketio.emit("scan_done", {"found": False}, to=sid)
 
     thread = threading.Thread(target=scan, daemon=True)
     thread.start()
